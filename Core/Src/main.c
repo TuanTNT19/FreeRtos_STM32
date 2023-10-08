@@ -1,20 +1,24 @@
+
 #include "stdio.h"
 #include "main.h"
 #include "cmsis_os.h"
-
+#include <stdlib.h>
 osThreadId defaultTaskHandle;
 TaskHandle_t AboveNormalHandle;
+SemaphoreHandle_t CouSemaxHandle;
+uint16_t a=0;
+uint16_t b=0;
 void StartDefaultTask(void const * argument);
 void AboveNormalTask (void *parameter);
-int i=0;
-	int j=0;
+uint8_t count1;
+uint8_t count2;
 int main(void)
 {
- 
+  
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-  xTaskCreate(AboveNormalTask, "Task01", 128, NULL, osPriorityAboveNormal+3, &AboveNormalHandle);
-
+  xTaskCreate(AboveNormalTask, "Task01", 128, NULL, 3, &AboveNormalHandle);
+  CouSemaxHandle=	xSemaphoreCreateCounting(18,4) ;
   osKernelStart();
 
 
@@ -29,35 +33,29 @@ int main(void)
 
 
 void AboveNormalTask (void *parameter){
-	
-	
+
+
 	while(1)
 	{
-		
-		i++;
-		if (i==5)
-		{
-			vTaskSuspend(defaultTaskHandle);
-		}
-		if (i==10)
-		{
-			vTaskResume(defaultTaskHandle);
-			
-		}
-		vTaskDelay(500);
-		
+		xSemaphoreGive(CouSemaxHandle);
+		a++;	 
+		vTaskDelay(1000);
 	}
 }
 
 void StartDefaultTask(void const * argument)
 {
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
 
   for(;;)
   {
-		j++;
-    osDelay(500);
+		count2=(uint8_t)uxSemaphoreGetCount(CouSemaxHandle);
+		b++;
+		if (b>=10) {
+				vTaskSuspend( AboveNormalHandle)	;		
+        xSemaphoreTake(CouSemaxHandle,osWaitForever);		
+			}
+		vTaskDelay(500);
+		
   }
   /* USER CODE END 5 */
 }
