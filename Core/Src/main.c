@@ -1,51 +1,12 @@
 #include "stdio.h"
 #include "main.h"
 #include "cmsis_os.h"
-
+#include <stdlib.h>
 osThreadId defaultTaskHandle;
 TaskHandle_t AboveNormalHandle;
 QueueHandle_t QueuexHandle;
 void StartDefaultTask(void const * argument);
 void AboveNormalTask (void *parameter);
-void ADC1_Config()
-{
-	RCC->APB2ENR |= 1<<9;  // enable ADC1 clock
-	RCC->APB2ENR |= (1<<2);  // enable GPIOA clock
-	GPIOA->CRL &=(0xFFFFFF0F);
-	GPIOA->CRL &=~(1<<1);// set GPIOA_PIN1 as ADC1_Channel 1
-	GPIOA->CRL &=(0xFFF0FFFF);
-	GPIOA->CRL &=~(1<<4);// set GPIOA_PIN4 as ADC1_Channel 4
-	ADC1->CR1 |=(1<<8);//enable scan mode
-	ADC1->CR2|=(1<<1);//enable continous mode
-	ADC1->CR2|=(1<<8);//enble DMA
-	ADC1->CR2 &=~(1<<11); //right alignment
-	ADC1->CR2 |=(7<<17);//SWSTART in EXTSEL bit
-	ADC1->CR2|=(1<<20);//Conversion on external event enabled
-	ADC1->SMPR2 &= ~((7<<3) | (7<<12));  // Sampling time of 1.5 cycles for channel 1 and channel 4
-	ADC1->SQR1|=(1<<20);//2 conversions
-	ADC1->SQR3|=((1<<0)|(4<<5));//set up ADC channel for channel 1 and 4
-	ADC1->CR2 |= (1 << 2); // turn calibrate on 
-	while(!(ADC1->CR2 & (1 << 2)));//check calibrate
-	ADC1->CR2|=(1<<0);//enable ADC1
-	ADC1->CR2 |=(1<<22);//enable conversion
-}
-void DMA_Init()
-{
-	RCC->AHBENR |= 1<<0;//enable clock for DMA1
-	DMA1_Channel1->CCR &=~ (1<<4);//read from peripheral
-	DMA1_Channel1->CCR |=(1<<5);//enable circular mode
-	DMA1_Channel1->CCR |=(1<<7);//enable memory increment
-	DMA1_Channel1->CCR|=(1<<8);//peripheral size : 16 bit
-	DMA1_Channel1->CCR|=(1<<10);//memory size : 16 bit
-	
-}
-void DMA1_Config(uint32_t srcAdd, uint32_t destAdd, uint16_t size)
-{
-	DMA1_Channel1->CNDTR = size;
-	DMA1_Channel1->CPAR = srcAdd;
-	DMA1_Channel1->CMAR=destAdd;
-	DMA1_Channel1->CCR |=(1<<0);//enable channel DMA
-}
 void USART1_Config()
 {
 	RCC->APB2ENR |= (1<<2);//enable clock for gpioa
@@ -71,20 +32,27 @@ void USART1_Send_String(char *str)
 		USART1_Send_char(*str++);
 	}
 }
-
-
+struct data{
+	uint16_t k;
+	int l;
+	
+};
+typedef struct data test;
+uint16_t k1;
+int l1;
 uint16_t adc_value[2];
 uint16_t data_receive[2];
+uint16_t a=5;
+uint16_t b;
+uint16_t c=0;
 char str[10];
 int main(void)
 {
-  ADC1_Config();
-	DMA_Init();
-	USART1_Config();
+  USART1_Config();
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-  xTaskCreate(AboveNormalTask, "Task01", 128, NULL, osPriorityAboveNormal+3, &AboveNormalHandle);
-  QueuexHandle = xQueueCreate(2,2);
+  xTaskCreate(AboveNormalTask, "Task01", 128, NULL, 3, &AboveNormalHandle);
+  QueuexHandle = xQueueCreate(2,sizeof(test));
   osKernelStart();
 
 
@@ -100,13 +68,16 @@ int main(void)
 
 void AboveNormalTask (void *parameter){
 	
-	DMA1_Config((uint32_t)&ADC1->DR, (uint32_t)adc_value, 2);
+//	DMA1_Config((uint32_t)&ADC1->DR, (uint32_t)adc_value, 2);
+	test *Task_data = osPoolAlloc(QueuexHandle);
+	
+	Task_data->l=9;
 	while(1)
 	{
 		
-	  
-		xQueueSend(QueuexHandle,&adc_value[0],NULL);
-		xQueueSend(QueuexHandle,&adc_value[1],NULL);
+	  Task_data->k=a;
+		xQueueSend(QueuexHandle,&Task_data ,NULL);
+		a++;
 		vTaskDelay(200);
 	}
 }
@@ -115,13 +86,16 @@ void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
+	test receive_data;
   for(;;)
   {
-     xQueueReceive(QueuexHandle,&data_receive[0],osWaitForever);
-		 xQueueReceive(QueuexHandle,&data_receive[1],osWaitForever);
-     int len1=sprintf(str,"%4d %4d",data_receive[0],data_receive[1]);
-		 USART1_Send_String((char *)str);
-
+     xQueueReceive(QueuexHandle,&receive_data,osWaitForever);
+		 c++;
+//     int len1=sprintf(str,"%4d",receive_data.k);
+	    k1=receive_data.k;
+		  l1=receive_data.l;
+		  osPoolFree(QueuexHandle,&receive_data);
+		
   }
   /* USER CODE END 5 */
 }
